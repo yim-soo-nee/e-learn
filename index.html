@@ -220,11 +220,44 @@ function launchApp(token) {
 }
 
 function callGAS(action, params) {
-  var url = GAS_URL + '?action=' + action;
-  Object.keys(params).forEach(function(k) {
-    url += '&' + k + '=' + encodeURIComponent(params[k] || '');
+  // ใช้ JSONP แทน fetch() เพื่อ bypass CORS ของ GAS
+  // GAS ไม่ส่ง Access-Control-Allow-Origin → fetch() ถูก block
+  // JSONP ใช้ <script src="..."> ซึ่งไม่ถูก CORS จำกัด
+  return new Promise(function(resolve, reject) {
+    var cbName = '_gasCb_' + Date.now();
+    var script = document.createElement('script');
+    var timer;
+
+    // GAS จะ return: callback({ ok:true, token:"..." })
+    window[cbName] = function(data) {
+      clearTimeout(timer);
+      document.head.removeChild(script);
+      delete window[cbName];
+      resolve(data);
+    };
+
+    var url = GAS_URL + '?action=' + action + '&callback=' + cbName;
+    Object.keys(params).forEach(function(k) {
+      url += '&' + k + '=' + encodeURIComponent(params[k] || '');
+    });
+
+    script.src = url;
+    script.onerror = function() {
+      clearTimeout(timer);
+      document.head.removeChild(script);
+      delete window[cbName];
+      reject(new Error('Script load error'));
+    };
+
+    // timeout 15 วินาที
+    timer = setTimeout(function() {
+      if (document.head.contains(script)) document.head.removeChild(script);
+      delete window[cbName];
+      reject(new Error('Timeout'));
+    }, 15000);
+
+    document.head.appendChild(script);
   });
-  return fetch(url).then(function(r) { return r.json(); });
 }
 
 // ============================================================
