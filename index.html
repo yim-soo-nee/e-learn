@@ -3,405 +3,368 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ยิ้มสู้หนี้ · Google Login Test</title>
+  <title>ยิ้มสู้หนี้ · ห้องเรียนออนไลน์</title>
 
-  <!-- Firebase SDK (compat version — ใช้งานง่าย ไม่ต้อง import) -->
+  <!-- LINE LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body {
-      font-family: 'IBM Plex Sans Thai', sans-serif;
-      background: linear-gradient(135deg, #0d1f91 0%, #1a34c4 100%);
-      min-height: 100vh;
-      display: flex; align-items: center; justify-content: center;
-      padding: 20px;
+    html, body { width:100%; height:100%; overflow:hidden; }
+    body { font-family: 'IBM Plex Sans Thai', 'Noto Sans Thai', sans-serif; }
+
+    /* ── LOADING ─────────────────────────────── */
+    #loading {
+      position:fixed; inset:0; z-index:200;
+      background:#0d1f91;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:14px;
+      transition: opacity .4s ease;
+    }
+    #loading.hide { opacity:0; pointer-events:none; }
+    #loading img  { width:72px; height:72px; object-fit:contain; }
+    #loading .ttl { font-size:18px; font-weight:700; color:#fff; }
+    #loading .sub { font-size:13px; color:rgba(255,255,255,.6); }
+    #loading .spinner {
+      width:28px; height:28px;
+      border:3px solid rgba(255,255,255,.2);
+      border-top-color:#fff; border-radius:50%;
+      animation:spin .8s linear infinite;
+    }
+    #loading .msg { font-size:13px; color:rgba(255,255,255,.85); }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ── ERROR ───────────────────────────────── */
+    #error-screen {
+      position:fixed; inset:0; z-index:150;
+      background:#f1f5f9;
+      display:none; flex-direction:column;
+      align-items:center; justify-content:center;
+      gap:14px; padding:32px; text-align:center;
+    }
+    #error-screen .err-icon { font-size:44px; }
+    #error-screen h2 { font-size:17px; color:#0d1f91; font-weight:700; }
+    #error-screen p  { font-size:13px; color:#64748b; line-height:1.6; }
+    #error-screen button {
+      padding:11px 28px; background:#0d1f91; color:#fff;
+      border:none; border-radius:10px; font-size:14px;
+      font-weight:600; cursor:pointer; font-family:inherit;
     }
 
-    /* ── CARD ── */
-    .card {
-      background: #fff;
-      border-radius: 20px;
-      padding: 36px 28px;
-      width: 100%; max-width: 380px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.2);
-      text-align: center;
+    /* ── CHOOSE SCREEN (เลือก login method) ─── */
+    #choose-screen {
+      position:fixed; inset:0; z-index:100;
+      background:linear-gradient(160deg,#0d1f91 0%,#1a34c4 100%);
+      display:none; flex-direction:column;
+      align-items:center; justify-content:center;
+      gap:0; padding:32px;
     }
-    .logo { font-size: 52px; margin-bottom: 10px; }
-    .title { font-size: 20px; font-weight: 700; color: #0d1f91; margin-bottom: 4px; }
-    .sub   { font-size: 13px; color: #94a3b8; margin-bottom: 28px; }
+    #choose-screen .logo   { font-size:52px; margin-bottom:10px; }
+    #choose-screen .ttl    { font-size:20px; font-weight:700; color:#fff; margin-bottom:4px; }
+    #choose-screen .sub    { font-size:13px; color:rgba(255,255,255,.65); margin-bottom:32px; }
 
-    /* ── STATUS ── */
-    .status {
-      font-size: 13px; padding: 10px 14px;
-      border-radius: 8px; margin-bottom: 16px; display: none;
+    .btn-login {
+      width:100%; max-width:320px;
+      display:flex; align-items:center; justify-content:center; gap:10px;
+      padding:14px 20px; border-radius:12px;
+      font-size:15px; font-weight:700;
+      cursor:pointer; font-family:inherit; border:none;
+      margin-bottom:12px;
+      transition:transform .15s, box-shadow .15s;
     }
-    .status.info  { background: #e8ecfd; color: #0d1f91; display: block; }
-    .status.ok    { background: #e8f8e2; color: #0f6e56; display: block; }
-    .status.error { background: #fee2e2; color: #dc2626; display: block; }
+    .btn-login:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(0,0,0,.2); }
+    .btn-login:active { transform:translateY(0); }
+    .btn-login:disabled { opacity:.5; cursor:not-allowed; transform:none; }
 
-    /* ── SIGN IN BUTTON ── */
-    .btn-google {
-      width: 100%; padding: 13px;
-      display: flex; align-items: center; justify-content: center; gap: 10px;
-      background: #fff; color: #1e293b;
-      border: 1.5px solid #e2e8f0; border-radius: 10px;
-      font-size: 14px; font-weight: 600; cursor: pointer;
-      font-family: inherit;
-      transition: background .15s, box-shadow .15s;
-    }
-    .btn-google:hover { background: #f8fafc; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-    .btn-google:disabled { opacity: .5; cursor: not-allowed; }
-    .btn-google svg { flex-shrink: 0; }
+    .btn-line   { background:#06C755; color:#fff; }
+    .btn-google { background:#fff; color:#1e293b; }
 
-    /* ── USER PROFILE (แสดงหลัง login) ── */
-    .profile { display: none; }
-    .profile.show { display: block; }
-    .profile-pic {
-      width: 64px; height: 64px; border-radius: 50%;
-      object-fit: cover; margin: 0 auto 10px;
-      border: 3px solid #0d1f91;
-      display: block;
-    }
-    .profile-name  { font-size: 16px; font-weight: 700; color: #1e293b; }
-    .profile-email { font-size: 12px; color: #94a3b8; margin-top: 2px; margin-bottom: 16px; }
-
-    /* ── RESULT BOX ── */
-    .result-box {
-      background: #f8fafc; border-radius: 10px;
-      padding: 14px; margin: 16px 0;
-      text-align: left; font-size: 12px; color: #475569;
-      border: 1px solid #e2e8f0; display: none;
-    }
-    .result-box.show { display: block; }
-    .result-row { display: flex; gap: 8px; margin-bottom: 6px; }
-    .result-row:last-child { margin-bottom: 0; }
-    .result-label { color: #94a3b8; width: 80px; flex-shrink: 0; }
-    .result-val   { color: #1e293b; font-weight: 500; word-break: break-all; }
-
-    /* ── ACTION BUTTONS ── */
-    .btn-row { display: flex; gap: 8px; margin-top: 16px; }
-    .btn {
-      flex: 1; padding: 10px;
-      border-radius: 8px; font-size: 13px; font-weight: 600;
-      cursor: pointer; font-family: inherit; border: none;
-    }
-    .btn-primary   { background: #0d1f91; color: #fff; }
-    .btn-secondary { background: #f1f5f9; color: #475569; }
-    .btn-danger    { background: #fee2e2; color: #dc2626; }
-
-    /* ── DIVIDER ── */
     .divider {
-      display: flex; align-items: center; gap: 10px;
-      margin: 20px 0; font-size: 12px; color: #94a3b8;
+      display:flex; align-items:center; gap:10px;
+      width:100%; max-width:320px; margin-bottom:12px;
+      font-size:12px; color:rgba(255,255,255,.4);
     }
     .divider::before, .divider::after {
-      content: ''; flex: 1; height: 1px; background: #e2e8f0;
+      content:''; flex:1; height:1px;
+      background:rgba(255,255,255,.2);
     }
 
-    /* ── LOG ── */
-    .log-box {
-      background: #0d1f91; border-radius: 10px;
-      padding: 12px 14px; margin-top: 20px;
-      font-family: 'Courier New', monospace; font-size: 11px;
-      color: #bfd0f7; text-align: left; max-height: 160px;
-      overflow-y: auto; display: none;
+    .notice {
+      font-size:11px; color:rgba(255,255,255,.4);
+      text-align:center; margin-top:8px; max-width:280px;
+      line-height:1.5;
     }
-    .log-box.show { display: block; }
-    .log-entry { margin-bottom: 3px; }
-    .log-entry.ok  { color: #6ee7b7; }
-    .log-entry.err { color: #fca5a5; }
 
-    .spinner {
-      display: inline-block; width: 14px; height: 14px;
-      border: 2px solid rgba(255,255,255,.3);
-      border-top-color: #fff;
-      border-radius: 50%; animation: spin .7s linear infinite;
-      vertical-align: middle; margin-right: 6px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .badge {
-      display: inline-block; font-size: 10px; padding: 2px 8px;
-      border-radius: 99px; background: #e8f8e2; color: #0f6e56;
-      font-weight: 600; margin-left: 6px; vertical-align: middle;
+    /* ── APP IFRAME ──────────────────────────── */
+    #app-frame {
+      position:fixed; top:0; left:0;
+      width:100%; height:100%;
+      border:none; display:none;
     }
   </style>
 </head>
 <body>
 
-<div class="card">
-  <div class="logo">😊</div>
-  <div class="title">ยิ้มสู้หนี้ <span class="badge">TEST</span></div>
-  <div class="sub">ทดสอบ Google Sign-In ผ่าน Firebase Auth</div>
-
-  <!-- STATUS MESSAGE -->
-  <div class="status info" id="status-msg">กำลังเชื่อมต่อ Firebase...</div>
-
-  <!-- SIGN IN SECTION -->
-  <div id="section-login">
-    <button class="btn-google" id="btn-google" onclick="signInWithGoogle()" disabled>
-      <svg width="18" height="18" viewBox="0 0 24 24">
-        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-      </svg>
-      เข้าสู่ระบบด้วย Google
-    </button>
-  </div>
-
-  <!-- PROFILE SECTION (แสดงหลัง login) -->
-  <div class="profile" id="section-profile">
-    <img class="profile-pic" id="profile-pic" src="" alt="profile">
-    <div class="profile-name" id="profile-name">—</div>
-    <div class="profile-email" id="profile-email">—</div>
-
-    <div class="result-box show" id="result-box">
-      <div class="result-row">
-        <span class="result-label">Google UID</span>
-        <span class="result-val" id="r-uid">—</span>
-      </div>
-      <div class="result-row">
-        <span class="result-label">Display Name</span>
-        <span class="result-val" id="r-name">—</span>
-      </div>
-      <div class="result-row">
-        <span class="result-label">Email</span>
-        <span class="result-val" id="r-email">—</span>
-      </div>
-      <div class="result-row">
-        <span class="result-label">ID Token</span>
-        <span class="result-val" id="r-token" style="font-size:10px;color:#94a3b8">กำลังดึง...</span>
-      </div>
-      <div class="result-row">
-        <span class="result-label">Provider</span>
-        <span class="result-val" id="r-provider">—</span>
-      </div>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="sendToGAS()">
-        ▶ ส่งไป GAS (ทดสอบ)
-      </button>
-      <button class="btn btn-danger" onclick="signOut()">
-        ออกจากระบบ
-      </button>
-    </div>
-  </div>
-
-  <!-- LOG -->
-  <div class="log-box" id="log-box"></div>
-
+<!-- Loading -->
+<div id="loading">
+  <img src="https://lh3.googleusercontent.com/d/1rCJPNfrf96621kkleh7rYAj4VnSg1r48"
+       alt="ยิ้มสู้หนี้" onerror="this.style.display='none'">
+  <div class="ttl">ยิ้มสู้หนี้</div>
+  <div class="sub">ห้องเรียนออนไลน์</div>
+  <div class="spinner"></div>
+  <div class="msg" id="loading-msg">กำลังตรวจสอบ...</div>
 </div>
+
+<!-- Error -->
+<div id="error-screen">
+  <div class="err-icon">⚠️</div>
+  <h2>เกิดข้อผิดพลาด</h2>
+  <p id="error-msg">ไม่สามารถเชื่อมต่อระบบได้<br>กรุณาลองใหม่</p>
+  <button onclick="location.reload()">ลองใหม่</button>
+</div>
+
+<!-- Choose Login Method -->
+<div id="choose-screen">
+  <div class="logo">😊</div>
+  <div class="ttl">ยิ้มสู้หนี้</div>
+  <div class="sub">ห้องเรียนออนไลน์ · คู่มือแก้หนี้ด้วยตัวเอง</div>
+
+  <button class="btn-login btn-line" id="btn-line" onclick="loginWithLine()">
+    <svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px">
+      <path d="M19.952 12.475c0-4.417-4.428-8.008-9.872-8.008S.208 8.058.208 12.475c0 3.96 3.511 7.278 8.252 7.907.322.07.759.21.87.483.1.248.065.637.032.888l-.14.844c-.043.248-.197.97.85.529 1.047-.442 5.65-3.328 7.707-5.697 1.422-1.56 2.173-3.143 2.173-4.954z"/>
+    </svg>
+    เข้าสู่ระบบด้วย LINE
+  </button>
+
+  <div class="divider">หรือ</div>
+
+  <button class="btn-login btn-google" id="btn-google" onclick="loginWithGoogle()">
+    <svg width="20" height="20" viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    </svg>
+    เข้าสู่ระบบด้วย Google
+  </button>
+
+  <div class="notice">
+    ครั้งแรกที่เข้า ระบบจะสร้างบัญชีให้อัตโนมัติ<br>
+    ไม่ต้องสมัครสมาชิกล่วงหน้า
+  </div>
+</div>
+
+<!-- App iframe -->
+<iframe id="app-frame" allow="fullscreen"></iframe>
 
 <script>
 // ============================================================
-//  CONFIG — แก้ค่าเหล่านี้ด้วย Firebase project ของคุณ
+//  CONFIG — แก้ค่าเหล่านี้เท่านั้น
 // ============================================================
+var LIFF_ID = '2006491477-lMQxonNr';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbyv2nRwrrDjVGnMqqfLhI_HD3VzRpNyy2EggcFxNnunUkDr0jNIxEkMdKoMvFdMm77zSA/exec';
+
 var FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyD9I15QhqPsl-8ybMyrFaGcP4u1HkdcKF4",
-  authDomain:        "member-nuadthai.firebaseapp.com",
-  projectId:         "member-nuadthai",
-  appId:             "1:1009776261711:web:28ff1ea8ae86ed50e9483a"
+  apiKey:     'AIzaSyD9I15QhqPsl-8ybMyrFaGcP4u1HkdcKF4',
+  authDomain: 'member-nuadthai.firebaseapp.com',
+  projectId:  'member-nuadthai',
+  appId:      '1:1009776261711:web:28ff1ea8ae86ed50e9483a'
 };
 
-// GAS URL สำหรับทดสอบส่ง token (ใส่ URL project หลักของคุณ)
-var GAS_URL = "https://script.google.com/macros/s/AKfycbyv2nRwrrDjVGnMqqfLhI_HD3VzRpNyy2EggcFxNnunUkDr0jNIxEkMdKoMvFdMm77zSA/exec";
-
 // ============================================================
-//  INIT Firebase
+//  UTILS
 // ============================================================
-var auth;
-
-function log(msg, type) {
-  var box = document.getElementById('log-box');
-  box.classList.add('show');
-  var entry = document.createElement('div');
-  entry.className = 'log-entry ' + (type || '');
-  var time = new Date().toLocaleTimeString('th-TH');
-  entry.textContent = '[' + time + '] ' + msg;
-  box.appendChild(entry);
-  box.scrollTop = box.scrollHeight;
+function setMsg(msg) {
+  var el = document.getElementById('loading-msg');
+  if (el) el.textContent = msg;
 }
 
-function setStatus(msg, type) {
-  var el = document.getElementById('status-msg');
-  el.className = 'status ' + type;
-  el.textContent = msg;
+function showLoading(msg) {
+  document.getElementById('loading').classList.remove('hide');
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('choose-screen').style.display = 'none';
+  if (msg) setMsg(msg);
 }
 
-window.addEventListener('load', function() {
+function showChoose() {
+  document.getElementById('loading').classList.add('hide');
+  setTimeout(function() {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('choose-screen').style.display = 'flex';
+  }, 400);
+}
+
+function showError(msg) {
+  document.getElementById('loading').classList.add('hide');
+  document.getElementById('choose-screen').style.display = 'none';
+  var err = document.getElementById('error-screen');
+  err.style.display = 'flex';
+  document.getElementById('error-msg').innerHTML = msg || 'เกิดข้อผิดพลาด กรุณาลองใหม่';
+}
+
+function launchApp(token) {
+  var url = GAS_URL + '?liff_token=' + encodeURIComponent(token);
+  var frame = document.getElementById('app-frame');
+  frame.src = url;
+  frame.style.display = 'block';
+  frame.onload = function() {
+    document.getElementById('loading').classList.add('hide');
+    setTimeout(function() {
+      document.getElementById('loading').style.display = 'none';
+    }, 450);
+  };
+}
+
+function callGAS(action, params) {
+  var url = GAS_URL + '?action=' + action;
+  Object.keys(params).forEach(function(k) {
+    url += '&' + k + '=' + encodeURIComponent(params[k] || '');
+  });
+  return fetch(url).then(function(r) { return r.json(); });
+}
+
+// ============================================================
+//  INIT — ตรวจทั้ง LINE context และ Firebase redirect result
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+  showLoading('กำลังตรวจสอบ...');
+
+  // ── Init Firebase ──
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
-    auth = firebase.auth();
-    log('Firebase init OK', 'ok');
-    setStatus('Firebase พร้อมแล้ว — กดปุ่มด้านล่างเพื่อทดสอบ', 'info');
-    document.getElementById('btn-google').disabled = false;
-
-    // ตรวจ auth state เมื่อโหลดหน้า (กรณี redirect กลับมา)
-    auth.getRedirectResult()
-      .then(function(result) {
-        if (result && result.user) {
-          log('getRedirectResult: พบ user จาก redirect', 'ok');
-          handleUser(result.user);
-        }
-      })
-      .catch(function(err) {
-        if (err.code !== 'auth/no-auth-event') {
-          log('getRedirectResult error: ' + err.message, 'err');
-        }
-      });
-
-    // ตรวจ auth state สำหรับ persistent session
-    auth.onAuthStateChanged(function(user) {
-      if (user) {
-        log('onAuthStateChanged: user = ' + user.email, 'ok');
-        handleUser(user);
-      } else {
-        log('onAuthStateChanged: ไม่มี user');
-        showLoginSection();
-      }
-    });
-
   } catch(e) {
-    log('Firebase init ERROR: ' + e.message, 'err');
-    setStatus('Firebase init ล้มเหลว: ' + e.message, 'error');
+    console.error('Firebase init failed:', e);
   }
+
+  var auth = firebase.auth();
+
+  // ── ตรวจ Google redirect result ก่อน (กรณีเด้งกลับมาจาก Google) ──
+  auth.getRedirectResult()
+    .then(function(result) {
+      if (result && result.user) {
+        // เด้งกลับมาจาก Google Sign-In
+        setMsg('กำลังเข้าสู่ระบบด้วย Google...');
+        return handleGoogleUser(result.user);
+      }
+
+      // ── ไม่มี redirect result → ตรวจ LINE context ──
+      return checkLineContext();
+    })
+    .catch(function(err) {
+      console.error('getRedirectResult error:', err);
+      // ไม่ใช่ redirect → ตรวจ LINE ต่อ
+      checkLineContext();
+    });
 });
 
 // ============================================================
-//  SIGN IN — ลอง popup ก่อน ถ้า block ใช้ redirect
+//  LINE — ตรวจว่าเปิดใน LINE หรือไม่
 // ============================================================
-function signInWithGoogle() {
+function checkLineContext() {
+  setMsg('กำลังตรวจสอบ LINE...');
+
+  liff.init({ liffId: LIFF_ID })
+    .then(function() {
+      if (liff.isInClient() && liff.isLoggedIn()) {
+        // เปิดใน LINE Browser → auto-login ทันที
+        setMsg('กำลังดึงข้อมูล LINE...');
+        return liff.getProfile();
+      } else {
+        // เบราว์เซอร์ปกติ → แสดงหน้าเลือก login method
+        showChoose();
+        return null;
+      }
+    })
+    .then(function(profile) {
+      if (!profile) return;
+      setMsg('กำลังเข้าสู่ระบบด้วย LINE...');
+      callGAS('liff_login', {
+        lineUserId:      profile.userId,
+        lineDisplayName: profile.displayName
+      })
+      .then(function(data) {
+        if (data && data.ok && data.token) {
+          launchApp(data.token);
+        } else {
+          showError((data && data.message) || 'LINE login ไม่สำเร็จ');
+        }
+      })
+      .catch(function() { showError('ไม่สามารถเชื่อมต่อระบบได้'); });
+    })
+    .catch(function(err) {
+      console.error('[LIFF] init error:', err);
+      // LIFF init ล้มเหลว → แสดงเลือก login
+      showChoose();
+    });
+}
+
+// ============================================================
+//  LINE — กดปุ่มจากหน้าเลือก (กรณีเบราว์เซอร์)
+// ============================================================
+function loginWithLine() {
+  document.getElementById('btn-line').disabled = true;
+  showLoading('กำลังพาไปยัง LINE Login...');
+  liff.login();
+}
+
+// ============================================================
+//  GOOGLE — กดปุ่มจากหน้าเลือก
+// ============================================================
+function loginWithGoogle() {
+  document.getElementById('btn-google').disabled = true;
+  showLoading('กำลังเปิดหน้าต่าง Google...');
+
+  var auth     = firebase.auth();
   var provider = new firebase.auth.GoogleAuthProvider();
   provider.addScope('profile');
   provider.addScope('email');
 
-  setStatus('กำลังเปิดหน้าต่าง Google...', 'info');
-  document.getElementById('btn-google').disabled = true;
-  log('เรียก signInWithPopup...');
-
+  // ลอง Popup ก่อน — ถ้า block ใช้ Redirect
   auth.signInWithPopup(provider)
     .then(function(result) {
-      log('Popup login สำเร็จ: ' + result.user.email, 'ok');
-      // handleUser ถูกเรียกจาก onAuthStateChanged แล้ว
+      setMsg('กำลังเข้าสู่ระบบด้วย Google...');
+      return handleGoogleUser(result.user);
     })
     .catch(function(err) {
-      if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
-        // Popup ถูก block → ใช้ redirect แทน
-        log('Popup ถูก block → ใช้ redirect แทน', 'err');
-        setStatus('Popup ถูก block — กำลัง redirect...', 'info');
+      if (err.code === 'auth/popup-blocked' ||
+          err.code === 'auth/popup-closed-by-user') {
+        setMsg('กำลัง redirect ไปยัง Google...');
         auth.signInWithRedirect(provider);
       } else {
-        log('Login error: ' + err.code + ' — ' + err.message, 'err');
-        setStatus('เกิดข้อผิดพลาด: ' + err.message, 'error');
+        console.error('Google login error:', err);
+        showError('Google Login ล้มเหลว:<br>' + (err.message || 'กรุณาลองใหม่'));
         document.getElementById('btn-google').disabled = false;
+        showChoose();
       }
     });
 }
 
 // ============================================================
-//  HANDLE USER — แสดงข้อมูลหลัง login
+//  GOOGLE — ส่ง UID ไป GAS
 // ============================================================
-function handleUser(user) {
-  setStatus('เข้าสู่ระบบสำเร็จ ✓', 'ok');
-
-  // แสดง profile
-  var pic = document.getElementById('profile-pic');
-  if (user.photoURL) {
-    pic.src = user.photoURL;
-    pic.style.display = 'block';
-  } else {
-    pic.style.display = 'none';
-  }
-
-  document.getElementById('profile-name').textContent  = user.displayName || '—';
-  document.getElementById('profile-email').textContent = user.email || '—';
-  document.getElementById('r-uid').textContent         = user.uid;
-  document.getElementById('r-name').textContent        = user.displayName || '—';
-  document.getElementById('r-email').textContent       = user.email || '—';
-  document.getElementById('r-provider').textContent    = user.providerData[0]
-    ? user.providerData[0].providerId : '—';
-
-  // ดึง ID Token (ใช้ส่งยืนยันตัวตนกับ GAS ได้)
-  user.getIdToken()
-    .then(function(token) {
-      document.getElementById('r-token').textContent = token.substring(0, 40) + '...';
-      log('ID Token ดึงแล้ว (แสดง 40 ตัวแรก)', 'ok');
-    })
-    .catch(function(e) {
-      document.getElementById('r-token').textContent = 'ดึงไม่ได้: ' + e.message;
-    });
-
-  showProfileSection();
-  log('แสดงข้อมูล user: ' + user.uid.substring(0,8) + '...', 'ok');
-}
-
-// ============================================================
-//  ทดสอบส่งข้อมูลไป GAS
-// ============================================================
-function sendToGAS() {
-  var uid  = document.getElementById('r-uid').textContent;
-  var name = document.getElementById('r-name').textContent;
-  var email = document.getElementById('r-email').textContent;
-
-  if (!uid || uid === '—') {
-    log('ยังไม่มีข้อมูล user', 'err');
-    return;
-  }
-
-  log('กำลังส่งข้อมูลไป GAS...');
-  setStatus('กำลังทดสอบส่งข้อมูลไป GAS...', 'info');
-
-  // ทดสอบด้วย action=google_login (GAS ยังไม่รองรับ — เพื่อดู response)
-  var url = GAS_URL
-    + '?action=google_login'
-    + '&googleUid='    + encodeURIComponent(uid)
-    + '&displayName='  + encodeURIComponent(name)
-    + '&email='        + encodeURIComponent(email);
-
-  fetch(url)
-    .then(function(res) { return res.json(); })
-    .then(function(data) {
-      log('GAS response: ' + JSON.stringify(data), 'ok');
-      setStatus('GAS ตอบกลับแล้ว — ดูผลใน log', 'ok');
-    })
-    .catch(function(err) {
-      log('GAS ยังไม่รองรับ google_login (ปกติสำหรับการทดสอบ): ' + err.message, 'err');
-      setStatus('Google login ทำงานได้ — GAS ยังรอ implement', 'info');
-    });
-}
-
-// ============================================================
-//  SIGN OUT
-// ============================================================
-function signOut() {
-  auth.signOut()
-    .then(function() {
-      log('Sign out สำเร็จ');
-      setStatus('ออกจากระบบแล้ว', 'info');
-      showLoginSection();
-    })
-    .catch(function(e) {
-      log('Sign out error: ' + e.message, 'err');
-    });
-}
-
-// ============================================================
-//  UI HELPERS
-// ============================================================
-function showLoginSection() {
-  document.getElementById('section-login').style.display  = 'block';
-  document.getElementById('section-profile').className    = 'profile';
-  document.getElementById('btn-google').disabled = false;
-}
-
-function showProfileSection() {
-  document.getElementById('section-login').style.display  = 'none';
-  document.getElementById('section-profile').className    = 'profile show';
+function handleGoogleUser(user) {
+  setMsg('กำลังเข้าสู่ระบบ...');
+  return callGAS('google_login', {
+    googleUid:   user.uid,
+    displayName: user.displayName || '',
+    email:       user.email || ''
+  })
+  .then(function(data) {
+    if (data && data.ok && data.token) {
+      setMsg('เข้าสู่ระบบสำเร็จ!');
+      launchApp(data.token);
+    } else {
+      showError((data && data.message) || 'Google login ไม่สำเร็จ');
+    }
+  })
+  .catch(function(err) {
+    console.error('GAS google_login error:', err);
+    showError('ไม่สามารถเชื่อมต่อระบบได้');
+  });
 }
 </script>
 
